@@ -1,41 +1,44 @@
 #!/usr/bin/env python3
-"""news-image-20261119 entry: place the finished front-page image at the
-grader's output path. Standard library only, fully deterministic.
+"""news-image-20261119 entry point.
 
-The image is drawn ahead of time by make_image.py and shipped as entry.png
-beside this file; this program only copies those exact bytes, so every run
-writes an identical file.
+Copies the finished front-page image (entry.png, shipped beside this file)
+to the grader's output directory. No network, no randomness: the same input
+bytes always produce the same output bytes.
 """
 import hashlib
 import os
-import shutil
 import sys
+from pathlib import Path
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, "entry.png")
-OUT_DIR = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
-DST = os.path.join(OUT_DIR, "entry.png")
+ENTRY = Path(__file__).resolve().parent / "entry.png"
 
 
-def digest(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
+def sha256_of(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        while True:
+            chunk = handle.read(1 << 16)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
-def main():
-    if not os.path.isfile(SRC):
-        print("entry.png missing beside main.py", file=sys.stderr)
+def run():
+    if not ENTRY.is_file():
+        print("entry.png is missing next to main.py", file=sys.stderr)
         return 1
-    os.makedirs(OUT_DIR, exist_ok=True)
-    shutil.copyfile(SRC, DST)
-    if digest(SRC) != digest(DST):
-        print("copy verification failed", file=sys.stderr)
+    target_dir = Path(os.environ.get("MAKEFUN_OUTPUT_DIR", "/output"))
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / "entry.png"
+    payload = ENTRY.read_bytes()
+    target.write_bytes(payload)
+    if sha256_of(target) != hashlib.sha256(payload).hexdigest():
+        print("output does not match entry.png", file=sys.stderr)
         return 1
+    print("wrote", target, len(payload), "bytes")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run())
